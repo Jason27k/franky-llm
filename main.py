@@ -1,11 +1,14 @@
 import os
 from fastapi import FastAPI
-from openrouter import OpenRouter
-import os
+from pydantic import BaseModel
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
 
 app = FastAPI()
-
-from pydantic import BaseModel
 
 
 class ChatRequest(BaseModel):
@@ -23,6 +26,10 @@ def load_system_prompt():
 
 system_prompt = load_system_prompt()
 
+# Initialize the Gemini client.
+# Because we ran load_dotenv(), it will automatically find GEMINI_API_KEY.
+client = genai.Client()
+
 
 @app.get("/")
 async def root():
@@ -31,18 +38,13 @@ async def root():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    with OpenRouter(api_key=os.getenv("OPENROUTER_API_KEY")) as client:
-        response_text = client.chat.send(
-            model="deepseek-v4-pro",
-            messages=[
-                {
-                    "content": system_prompt,
-                    "role": "system",
-                },
-                {
-                    "role": "user",
-                    "content": request.prompt,
-                },
-            ],
-        )
-    return ChatResponse(response=response_text.choices[0].message.content)
+    # Call the Gemini API
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=request.prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+        ),
+    )
+
+    return ChatResponse(response=response.text)
